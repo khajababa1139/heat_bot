@@ -195,6 +195,18 @@ class OdriveCanTuner:
 # Interactive REPL
 # ---------------------------------------------------------------------------
 def handle_command(tuner: OdriveCanTuner, line: str, all_nodes: list):
+    # save            -> save_configuration on every node in all_nodes
+    # save<N>         -> save_configuration on node N only
+    save_match = re.match(r'^save(?P<node>\d*)$', line.strip().lower())
+    if save_match:
+        node_str = save_match.group("node")
+        targets = all_nodes if node_str == "" else [int(node_str)]
+        for node_id in targets:
+            print(f"  saving configuration on node {node_id} (this will reboot the axis) ...")
+            tuner.save_configuration(node_id)
+            time.sleep(0.1)
+        return
+
     m = CMD_RE.match(line)
     if not m:
         print("  could not parse - expected: odrv<N>.<param.path> [ = <value> ]")
@@ -253,6 +265,8 @@ def run_interactive(tuner: OdriveCanTuner, all_nodes: list):
     print("  odrv0.axis0.controller.config.vel_gain = 0.15   -> writes node 0 only")
     print(f"  odrv.axis0.controller.config.vel_gain = 0.15    -> writes all nodes {all_nodes}")
     print("  odrv0.axis0.controller.config.vel_gain          -> reads node 0 only")
+    print("  save             -> persist ALL nodes' current RAM config to flash (reboots them)")
+    print("  save0            -> persist node 0 only to flash (reboots it)")
     print("Type 'quit' or 'exit' to leave.\n")
     while True:
         try:
