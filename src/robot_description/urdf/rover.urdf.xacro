@@ -46,6 +46,21 @@
   <xacro:property name="enclosure_bottom_to_ground"  value="${enclosure_top_to_ground - chassis_height}"/>
   <xacro:property name="axle_to_chassis_bottom"      value="${enclosure_bottom_to_ground - ground_to_axle_height}"/>
 
+  <!-- ============================================================
+       Livox LiDAR mount
+       Front-center of chassis, optical point 6 cm above chassis top
+       face. Derived from the chassis properties above so it stays
+       correct automatically if chassis dimensions ever change.
+       rpy assumes the unit is mounted level and facing straight
+       forward (+X) - update if there's any measured tilt/rotation.
+       ============================================================ -->
+  <xacro:property name="lidar_z_above_chassis_top" value="0.06"/>
+
+  <!-- Rough Mid-360 housing dimensions, for the rviz visual only -
+       does not affect the mount joint's origin/collision behavior. -->
+  <xacro:property name="lidar_visual_radius" value="0.0335"/>
+  <xacro:property name="lidar_visual_height" value="0.065"/>
+
   <xacro:include filename="$(find robot_description)/urdf/rover.materials.xacro"/>
   <xacro:include filename="$(find robot_description)/urdf/rover.ros2_control.xacro"/>
 
@@ -148,6 +163,35 @@
   <xacro:wheel prefix="front_right" x_offset="${wheelbase/2}"  y_offset="${-track_width/2}"/>
   <xacro:wheel prefix="rear_left"   x_offset="${-wheelbase/2}" y_offset="${track_width/2}"/>
   <xacro:wheel prefix="rear_right"  x_offset="${-wheelbase/2}" y_offset="${-track_width/2}"/>
+
+  <!-- ============================================================
+       Livox LiDAR - front-center of chassis, optical point 6 cm
+       above the chassis top face.
+       ============================================================ -->
+  <joint name="livox_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="livox_frame"/>
+    <origin xyz="${chassis_length/2} 0 ${axle_to_chassis_bottom + chassis_height + lidar_z_above_chassis_top}"
+            rpy="0 0 0"/>
+  </joint>
+
+  <link name="livox_frame">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_visual_radius}" length="${lidar_visual_height}"/></geometry>
+      <material name="chassis_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_visual_radius}" length="${lidar_visual_height}"/></geometry>
+    </collision>
+    <inertial>
+      <!-- ASSUMED - Mid-360 is ~265 g, negligible for the rover but included for completeness -->
+      <mass value="0.265"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0002"/>
+    </inertial>
+  </link>
 
   <!-- ============================================================
        Hook up ros2_control (node ids match the mapping documented
