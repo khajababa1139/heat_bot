@@ -214,16 +214,6 @@ hardware_interface::return_type ODriveS1SystemHardware::write(
 {
   for (auto & wheel : wheels_) {
     double cmd_vel = wheel.velocity_command;
-
-    // Apply command inversions based on user rules:
-    // - Invert CAN IDs 1 and 3 for forward/backward correction
-    // - Invert CAN IDs 0 and 2 for right/left turn correction
-    if (wheel.node_id == 1 || wheel.node_id == 3 || wheel.node_id == 0 || wheel.node_id == 2) {
-      // If both sets need inversion or specific sets, apply multiplier:
-      // Applying inversion to specified node IDs:
-      cmd_vel = -cmd_vel;
-    }
-
     double turns_s = cmd_vel * kRadToTurns;
     turns_s = std::clamp(turns_s, -max_velocity_turns_per_sec_, max_velocity_turns_per_sec_);
     send_input_vel(wheel.node_id, static_cast<float>(turns_s));
