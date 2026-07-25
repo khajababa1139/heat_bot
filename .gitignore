@@ -1,0 +1,10 @@
+# Ignore ROS 2 build directories
+build/
+install/
+log/
+
+# Ignore Python & IDE junk
+__pycache__/
+*.pyc
+.vscode/
+.idea/
