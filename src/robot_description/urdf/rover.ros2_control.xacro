@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    ros2_control hardware block for the 4 drive wheels.
+
+    node_id args map each wheel joint to the CAN node id configured on that wheel's
+    ODrive S1 (Odrive.axis0.config.can.node_id). Defaults assume:
+      front_left  -> node 0
+      front_right -> node 1
+      rear_left   -> node 2
+      rear_right  -> node 3
+    Override at the xacro call site (or from the launch file) if your bench-tested
+    node ids differ - do NOT assume these match sample_can.py's NODE_IDS = [0, 1],
+    which only exercised two axes on the bench.
+  -->
+  <xacro:macro name="rover_ros2_control"
+               params="can_interface:=can0
+                       can_timeout_ms:=100
+                       max_velocity_turns_per_sec:=5.0
+                       fl_node_id:=0
+                       fr_node_id:=1
+                       rl_node_id:=2
+                       rr_node_id:=3">
+
+    <ros2_control name="RoverSystem" type="system">
+      <hardware>
+        <plugin>odrive_s1_hw_interface/ODriveS1SystemHardware</plugin>
+        <param name="can_interface">${can_interface}</param>
+        <param name="can_timeout_ms">${can_timeout_ms}</param>
+        <param name="max_velocity_turns_per_sec">${max_velocity_turns_per_sec}</param>
+      </hardware>
+
+      <joint name="front_left_wheel_joint">
+        <param name="node_id">${fl_node_id}</param>
+        <command_interface name="velocity"/>
+        <state_interface name="velocity"/>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="front_right_wheel_joint">
+        <param name="node_id">${fr_node_id}</param>
+        <command_interface name="velocity"/>
+        <state_interface name="velocity"/>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="rear_left_wheel_joint">
+        <param name="node_id">${rl_node_id}</param>
+        <command_interface name="velocity"/>
+        <state_interface name="velocity"/>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="rear_right_wheel_joint">
+        <param name="node_id">${rr_node_id}</param>
+        <command_interface name="velocity"/>
+        <state_interface name="velocity"/>
+        <state_interface name="position"/>
+      </joint>
+    </ros2_control>
+
+  </xacro:macro>
+
+</robot>

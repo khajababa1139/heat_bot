@@ -1,0 +1,158 @@
+<?xml version="1.0"?>
+<robot name="rover" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================================================
+       Launch-time args
+       ============================================================ -->
+  <xacro:arg name="can_interface" default="can0"/>
+
+  <!-- ============================================================
+       Measured hardware dimensions (all meters). See README.md in
+       the workspace root for how each derived value below was
+       computed from the numbers you gave me, and which few values
+       (wheel width, rail cross-section, masses/inertias) were not
+       specified and are placeholder assumptions.
+       ============================================================ -->
+
+  <!-- enclosure / main body -->
+  <xacro:property name="chassis_length" value="0.34"/>
+  <xacro:property name="chassis_width"  value="0.20"/>
+  <xacro:property name="chassis_height" value="0.10"/>
+
+  <!-- wheels -->
+  <xacro:property name="wheel_radius"   value="0.075"/>  <!-- 15 cm diameter -->
+  <xacro:property name="wheel_width"    value="0.04"/>   <!-- ASSUMED: not given -->
+
+  <!-- layout -->
+  <xacro:property name="track_width"    value="0.38"/>   <!-- left/right wheel-center distance -->
+  <xacro:property name="wheelbase"      value="0.40"/>   <!-- front/rear wheel-center distance -->
+
+  <!-- side rails (the metal links carrying the 4 motors) -->
+  <xacro:property name="rail_length"    value="0.50"/>
+  <xacro:property name="rail_width"     value="0.03"/>   <!-- ASSUMED cross-section: not given -->
+  <xacro:property name="rail_height"    value="0.03"/>   <!-- ASSUMED cross-section: not given -->
+
+  <!--
+    Vertical stack, derived entirely from your measurements:
+      enclosure_top_to_ground   = 0.22  (given)
+      enclosure_bottom_to_ground = enclosure_top_to_ground - chassis_height = 0.12
+      ground_to_axle_height      = wheel_radius = 0.075
+      axle_to_chassis_bottom     = enclosure_bottom_to_ground - ground_to_axle_height = 0.045
+    i.e. the axles sit 4.5 cm below the enclosure's bottom face, which is where the
+    side rails do their job of dropping the motors down to the wheel centers.
+  -->
+  <xacro:property name="ground_to_axle_height"      value="${wheel_radius}"/>
+  <xacro:property name="enclosure_top_to_ground"     value="0.22"/>
+  <xacro:property name="enclosure_bottom_to_ground"  value="${enclosure_top_to_ground - chassis_height}"/>
+  <xacro:property name="axle_to_chassis_bottom"      value="${enclosure_bottom_to_ground - ground_to_axle_height}"/>
+
+  <xacro:include filename="$(find robot_description)/urdf/rover.materials.xacro"/>
+  <xacro:include filename="$(find robot_description)/urdf/rover.ros2_control.xacro"/>
+
+  <!-- ============================================================
+       base_footprint (ground projection) -> base_link (axle height)
+       ============================================================ -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${ground_to_axle_height}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link"/>
+
+  <!-- ============================================================
+       Chassis / enclosure
+       ============================================================ -->
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="chassis_link"/>
+    <origin xyz="0 0 ${axle_to_chassis_bottom + chassis_height/2}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="chassis_link">
+    <visual>
+      <geometry><box size="${chassis_length} ${chassis_width} ${chassis_height}"/></geometry>
+      <material name="chassis_grey"/>
+    </visual>
+    <collision>
+      <geometry><box size="${chassis_length} ${chassis_width} ${chassis_height}"/></geometry>
+    </collision>
+    <inertial>
+      <!-- ASSUMED mass/inertia placeholder - refine once you know real payload mass -->
+      <mass value="6.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.050" ixy="0" ixz="0" iyy="0.080" iyz="0" izz="0.090"/>
+    </inertial>
+  </link>
+
+  <!-- ============================================================
+       Side rails (metal links housing 2 motors each)
+       ============================================================ -->
+  <xacro:macro name="rail" params="prefix y_offset">
+    <joint name="${prefix}_rail_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${prefix}_rail_link"/>
+      <origin xyz="0 ${y_offset} 0" rpy="0 0 0"/>
+    </joint>
+    <link name="${prefix}_rail_link">
+      <visual>
+        <geometry><box size="${rail_length} ${rail_width} ${rail_height}"/></geometry>
+        <material name="rail_dark"/>
+      </visual>
+      <collision>
+        <geometry><box size="${rail_length} ${rail_width} ${rail_height}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.5"/>
+        <origin xyz="0 0 0"/>
+        <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.010" iyz="0" izz="0.010"/>
+      </inertial>
+    </link>
+  </xacro:macro>
+
+  <xacro:rail prefix="left"  y_offset="${track_width/2}"/>
+  <xacro:rail prefix="right" y_offset="${-track_width/2}"/>
+
+  <!-- ============================================================
+       Wheels - continuous joints, spin axis = local Y (REP-103)
+       ============================================================ -->
+  <xacro:macro name="wheel" params="prefix x_offset y_offset">
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${prefix}_wheel_link"/>
+      <origin xyz="${x_offset} ${y_offset} 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+    <link name="${prefix}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="wheel_black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.8"/>
+        <origin xyz="0 0 0"/>
+        <inertia ixx="0.0010" ixy="0" ixz="0" iyy="0.0010" iyz="0" izz="0.0010"/>
+      </inertial>
+    </link>
+  </xacro:macro>
+
+  <xacro:wheel prefix="front_left"  x_offset="${wheelbase/2}"  y_offset="${track_width/2}"/>
+  <xacro:wheel prefix="front_right" x_offset="${wheelbase/2}"  y_offset="${-track_width/2}"/>
+  <xacro:wheel prefix="rear_left"   x_offset="${-wheelbase/2}" y_offset="${track_width/2}"/>
+  <xacro:wheel prefix="rear_right"  x_offset="${-wheelbase/2}" y_offset="${-track_width/2}"/>
+
+  <!-- ============================================================
+       Hook up ros2_control (node ids match the mapping documented
+       in rover.ros2_control.xacro / README.md)
+       ============================================================ -->
+  <xacro:rover_ros2_control can_interface="$(arg can_interface)"/>
+
+</robot>

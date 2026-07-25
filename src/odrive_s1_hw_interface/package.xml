@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>odrive_s1_hw_interface</name>
+  <version>0.1.0</version>
+  <description>
+    ros2_control SystemInterface plugin driving 4x ODrive S1 controllers over
+    raw SocketCAN in velocity mode (CAN Simple protocol).
+  </description>
+  <maintainer email="you@example.com">rover_dev</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>hardware_interface</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+
+  <export>
+    <hardware_interface plugin="${prefix}/odrive_s1_hw_interface.xml"/>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

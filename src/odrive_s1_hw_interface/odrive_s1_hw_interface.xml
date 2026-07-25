@@ -1,0 +1,10 @@
+<library path="odrive_s1_hw_interface">
+  <class name="odrive_s1_hw_interface/ODriveS1SystemHardware"
+         type="odrive_s1_hw_interface::ODriveS1SystemHardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      SystemInterface plugin that drives 4x ODrive S1 controllers over SocketCAN in
+      closed-loop velocity mode, one CAN node per wheel joint.
+    </description>
+  </class>
+</library>
