@@ -15,7 +15,7 @@ diff_drive_controller:
     left_wheel_names: ["front_left_wheel_joint", "rear_left_wheel_joint"]
     right_wheel_names: ["front_right_wheel_joint", "rear_right_wheel_joint"]
 
-    wheel_separation: 0.38   # measured: left/right wheel-center distance (track width)
+    wheel_separation: 0.43   # measured: left/right wheel-center distance (track width)
     wheel_radius: 0.075      # measured: 15 cm wheel diameter / 2
 
     wheel_separation_multiplier: 1.0
