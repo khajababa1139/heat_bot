@@ -110,6 +110,7 @@ hardware_interface::CallbackReturn ODriveS1SystemHardware::on_configure(
     wheel.position = 0.0;
     wheel.velocity = 0.0;
     wheel.velocity_command = 0.0;
+    wheel.last_feedback_time = rclcpp::Time(0, 0, RCL_ROS_TIME);
   }
 
   RCLCPP_INFO(get_logger(), "SocketCAN interface '%s' opened", can_interface_.c_str());
@@ -137,8 +138,7 @@ hardware_interface::CallbackReturn ODriveS1SystemHardware::on_activate(
   }
 
   // Give every axis a chance to report CLOSED_LOOP_CONTROL back over its heartbeat
-  // before declaring activation successful - this is the same closed-loop check
-  // sample_can.py's `closed` command does interactively, just automated here.
+  // before declaring activation successful.
   bool all_ok = true;
   for (auto & wheel : wheels_) {
     if (!wait_for_axis_state(
@@ -181,9 +181,7 @@ hardware_interface::return_type ODriveS1SystemHardware::read(
   const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
   // Drain whatever is currently sitting in the socket's receive buffer without
-  // blocking the control loop. The cap keeps this bounded even if the bus is
-  // unusually busy; in normal operation there are only a handful of frames
-  // (4 heartbeats + 4 encoder-estimate messages) per cycle.
+  // blocking the control loop.
   constexpr int kMaxFramesPerCycle = 64;
   for (int i = 0; i < kMaxFramesPerCycle; ++i) {
     auto frame = can_bus_.receive(0);
@@ -194,6 +192,8 @@ hardware_interface::return_type ODriveS1SystemHardware::read(
   }
 
   std::lock_guard<std::mutex> lock(state_mutex_);
+  rclcpp::Clock ros_clock(RCL_ROS_TIME);
+
   for (auto & wheel : wheels_) {
     if (!wheel.feedback_seen) {
       continue;  // no feedback yet at all - keep the zeroed initial state
@@ -203,7 +203,7 @@ hardware_interface::return_type ODriveS1SystemHardware::read(
     const double stale_after = (can_timeout_ms_ / 1000.0) * 5.0;
     if (age > stale_after) {
       RCLCPP_WARN_THROTTLE(
-        get_logger(), clock_, 1000, "No CAN feedback from node %u ('%s') for %.2f s",
+        get_logger(), ros_clock, 1000, "No CAN feedback from node %u ('%s') for %.2f s",
         wheel.node_id, wheel.joint_name.c_str(), age);
       continue;  // hold last known good value rather than snapping to zero
     }
@@ -266,7 +266,7 @@ bool ODriveS1SystemHardware::wait_for_axis_state(
   while (std::chrono::steady_clock::now() < deadline) {
     auto frame = can_bus_.receive(20);
     if (frame) {
-      process_frame(*frame, rclcpp::Clock(RCL_STEADY_TIME).now());
+      process_frame(*frame, rclcpp::Clock(RCL_ROS_TIME).now());
     }
 
     std::lock_guard<std::mutex> lock(state_mutex_);

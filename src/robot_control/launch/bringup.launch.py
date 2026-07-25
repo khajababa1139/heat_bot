@@ -6,7 +6,7 @@ It starts, in order:
   2. ros2_control_node        - loads the ODrive S1 SystemInterface plugin, opens CAN
   3. joint_state_broadcaster  - spawned once ros2_control_node is up
   4. diff_drive_controller    - spawned once joint_state_broadcaster has finished
-                                 activating, subscribes /cmd_vel, publishes wheel odom
+                                activating, subscribes /cmd_vel, publishes wheel odom
 
 Usage:
   ros2 launch robot_control bringup.launch.py
@@ -28,6 +28,7 @@ from launch.actions import DeclareLaunchArgument, RegisterEventHandler
 from launch.event_handlers import OnProcessExit, OnProcessStart
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -49,7 +50,11 @@ def generate_launch_description():
             LaunchConfiguration("can_interface"),
         ]
     )
-    robot_description = {"robot_description": robot_description_content}
+
+    # Wrapped in ParameterValue(..., value_type=str) to prevent ROS 2 from attempting to parse URDF as YAML
+    robot_description = {
+        "robot_description": ParameterValue(robot_description_content, value_type=str)
+    }
 
     controllers_yaml = PathJoinSubstitution(
         [FindPackageShare("robot_control"), "config", "controllers.yaml"]
