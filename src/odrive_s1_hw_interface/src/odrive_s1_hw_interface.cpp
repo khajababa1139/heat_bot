@@ -214,6 +214,9 @@ hardware_interface::return_type ODriveS1SystemHardware::write(
 {
   for (auto & wheel : wheels_) {
     double cmd_vel = wheel.velocity_command;
+    if (wheel.node_id == 1 || wheel.node_id == 3) {
+      cmd_vel = -cmd_vel;
+    }
     double turns_s = cmd_vel * kRadToTurns;
     turns_s = std::clamp(turns_s, -max_velocity_turns_per_sec_, max_velocity_turns_per_sec_);
     send_input_vel(wheel.node_id, static_cast<float>(turns_s));
