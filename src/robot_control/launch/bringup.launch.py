@@ -85,7 +85,13 @@ def generate_launch_description():
     diff_drive_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["diff_drive_controller", "--controller-manager", "/controller_manager", "--ros-args", "--remap", "/diff_drive_controller/cmd_vel_unstamped:=/cmd_vel",],
+        arguments=[
+            "diff_drive_controller",
+            "--controller-manager", "/controller_manager",
+        ],
+        remappings=[
+            ("/diff_drive_controller/cmd_vel_unstamped", "/cmd_vel"),
+        ],
         output="screen",
     )
 
