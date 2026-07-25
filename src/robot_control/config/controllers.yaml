@@ -31,7 +31,7 @@ diff_drive_controller:
     open_loop: false        # false = trust the ODrive's encoder velocity feedback,
                              # not just the last commanded velocity - matters a lot on
                              # skid/scrub turns with 4 wheels
-    enable_odom_tf: true
+    enable_odom_tf: false
 
     cmd_vel_timeout: 0.5
     use_stamped_vel: false
