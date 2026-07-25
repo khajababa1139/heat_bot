@@ -202,25 +202,21 @@ hardware_interface::return_type ODriveS1SystemHardware::read(
       continue;
     }
 
-    wheel.position = static_cast<double>(wheel.raw_pos_turns) * kTurnsToRad;
-    wheel.velocity = static_cast<double>(wheel.raw_vel_turns_s) * kTurnsToRad;
-  }
-
-  return hardware_interface::return_type::OK;
-}
-
-hardware_interface::return_type ODriveS1SystemHardware::write(
-  const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
-{
-  for (auto & wheel : wheels_) {
-    double cmd_vel = wheel.velocity_command;
+    // Nodes 1 and 3 have their commanded velocity sign inverted in write() to
+    // correct for mounting orientation. Their encoder feedback shares the same
+    // ODrive-internal sign convention, so it must be inverted the same way here
+    // to keep state and command in one consistent frame.
+    double raw_pos = static_cast<double>(wheel.raw_pos_turns);
+    double raw_vel = static_cast<double>(wheel.raw_vel_turns_s);
     if (wheel.node_id == 1 || wheel.node_id == 3) {
-      cmd_vel = -cmd_vel;
+      raw_pos = -raw_pos;
+      raw_vel = -raw_vel;
     }
-    double turns_s = cmd_vel * kRadToTurns;
-    turns_s = std::clamp(turns_s, -max_velocity_turns_per_sec_, max_velocity_turns_per_sec_);
-    send_input_vel(wheel.node_id, static_cast<float>(turns_s));
+
+    wheel.position = raw_pos * kTurnsToRad;
+    wheel.velocity = raw_vel * kTurnsToRad;
   }
+
   return hardware_interface::return_type::OK;
 }
 
