@@ -100,7 +100,7 @@ hardware_interface::CallbackReturn ODriveS1SystemHardware::on_configure(
     RCLCPP_ERROR(
       get_logger(),
       "Failed to open SocketCAN interface '%s'. Bring it up first, e.g.: "
-      "sudo ip link set %s up type can bitrate 250000",
+      "sudo ip link set %s up type can bitrate 500000",
       can_interface_.c_str(), can_interface_.c_str());
     return hardware_interface::CallbackReturn::ERROR;
   }
@@ -137,8 +137,6 @@ hardware_interface::CallbackReturn ODriveS1SystemHardware::on_activate(
     send_axis_state(wheel.node_id, AXIS_STATE_CLOSED_LOOP_CONTROL);
   }
 
-  // Give every axis a chance to report CLOSED_LOOP_CONTROL back over its heartbeat
-  // before declaring activation successful.
   bool all_ok = true;
   for (auto & wheel : wheels_) {
     if (!wait_for_axis_state(
@@ -152,7 +150,6 @@ hardware_interface::CallbackReturn ODriveS1SystemHardware::on_activate(
   }
 
   if (!all_ok) {
-    // Best-effort: walk back any axis we did manage to arm before failing activation.
     for (auto & wheel : wheels_) {
       send_axis_state(wheel.node_id, AXIS_STATE_IDLE);
     }
@@ -166,7 +163,6 @@ hardware_interface::CallbackReturn ODriveS1SystemHardware::on_activate(
 hardware_interface::CallbackReturn ODriveS1SystemHardware::on_deactivate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  // Zero velocity before dropping to IDLE, so nothing lurches on the way down.
   for (auto & wheel : wheels_) {
     send_input_vel(wheel.node_id, 0.0f);
   }
@@ -180,8 +176,6 @@ hardware_interface::CallbackReturn ODriveS1SystemHardware::on_deactivate(
 hardware_interface::return_type ODriveS1SystemHardware::read(
   const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
-  // Drain whatever is currently sitting in the socket's receive buffer without
-  // blocking the control loop.
   constexpr int kMaxFramesPerCycle = 64;
   for (int i = 0; i < kMaxFramesPerCycle; ++i) {
     auto frame = can_bus_.receive(0);
@@ -196,7 +190,7 @@ hardware_interface::return_type ODriveS1SystemHardware::read(
 
   for (auto & wheel : wheels_) {
     if (!wheel.feedback_seen) {
-      continue;  // no feedback yet at all - keep the zeroed initial state
+      continue;
     }
 
     const double age = (time - wheel.last_feedback_time).seconds();
@@ -205,7 +199,7 @@ hardware_interface::return_type ODriveS1SystemHardware::read(
       RCLCPP_WARN_THROTTLE(
         get_logger(), ros_clock, 1000, "No CAN feedback from node %u ('%s') for %.2f s",
         wheel.node_id, wheel.joint_name.c_str(), age);
-      continue;  // hold last known good value rather than snapping to zero
+      continue;
     }
 
     wheel.position = static_cast<double>(wheel.raw_pos_turns) * kTurnsToRad;
@@ -219,7 +213,18 @@ hardware_interface::return_type ODriveS1SystemHardware::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
   for (auto & wheel : wheels_) {
-    double turns_s = wheel.velocity_command * kRadToTurns;
+    double cmd_vel = wheel.velocity_command;
+
+    // Apply command inversions based on user rules:
+    // - Invert CAN IDs 1 and 3 for forward/backward correction
+    // - Invert CAN IDs 0 and 2 for right/left turn correction
+    if (wheel.node_id == 1 || wheel.node_id == 3 || wheel.node_id == 0 || wheel.node_id == 2) {
+      // If both sets need inversion or specific sets, apply multiplier:
+      // Applying inversion to specified node IDs:
+      cmd_vel = -cmd_vel;
+    }
+
+    double turns_s = cmd_vel * kRadToTurns;
     turns_s = std::clamp(turns_s, -max_velocity_turns_per_sec_, max_velocity_turns_per_sec_);
     send_input_vel(wheel.node_id, static_cast<float>(turns_s));
   }
@@ -235,7 +240,7 @@ void ODriveS1SystemHardware::process_frame(const can_frame & frame, const rclcpp
     wheels_.begin(), wheels_.end(),
     [node_id](const WheelContext & w) {return w.node_id == node_id;});
   if (it == wheels_.end()) {
-    return;  // frame from a node we don't own - ignore
+    return;
   }
 
   std::lock_guard<std::mutex> lock(state_mutex_);

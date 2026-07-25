@@ -18,10 +18,10 @@
                params="can_interface:=can0
                        can_timeout_ms:=100
                        max_velocity_turns_per_sec:=5.0
-                       fl_node_id:=0
-                       fr_node_id:=1
-                       rl_node_id:=2
-                       rr_node_id:=3">
+                       fl_node_id:=1
+                       fr_node_id:=0
+                       rl_node_id:=3
+                       rr_node_id:=2">
 
     <ros2_control name="RoverSystem" type="system">
       <hardware>
