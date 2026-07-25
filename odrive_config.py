@@ -76,8 +76,13 @@ TYPE_MAP = {
 # Command syntax: odrv<node_id>.<dotted.param.path>[ = <value>]
 # The single space before/after "=" is required, matching odrivetool-style
 # commands typed by hand.
+#
+# The node id is optional: "odrv0.foo.bar" targets node 0 only, while
+# "odrv.foo.bar" (no digits between "odrv" and ".") targets every node in
+# the configured all-nodes list - handy for pushing the same value to every
+# wheel in one line instead of repeating the command per node id.
 CMD_RE = re.compile(
-    r'^odrv(?P<node>\d+)\.(?P<path>[A-Za-z0-9_.]+)(?:\s=\s(?P<value>.+))?$'
+    r'^odrv(?P<node>\d*)\.(?P<path>[A-Za-z0-9_.]+)(?:\s=\s(?P<value>.+))?$'
 )
 
 
@@ -189,15 +194,23 @@ class OdriveCanTuner:
 # ---------------------------------------------------------------------------
 # Interactive REPL
 # ---------------------------------------------------------------------------
-def handle_command(tuner: OdriveCanTuner, line: str):
+def handle_command(tuner: OdriveCanTuner, line: str, all_nodes: list):
     m = CMD_RE.match(line)
     if not m:
         print("  could not parse - expected: odrv<N>.<param.path> [ = <value> ]")
         return
 
-    node_id = int(m.group("node"))
+    node_str = m.group("node")
     path = m.group("path")
     raw_value = m.group("value")
+
+    # No digits after "odrv" -> broadcast to every configured node instead
+    # of a single one.
+    if node_str == "":
+        target_nodes = all_nodes
+        print(f"  (no node id given - applying to all nodes: {target_nodes})")
+    else:
+        target_nodes = [int(node_str)]
 
     if path not in tuner.endpoints:
         suggestion = difflib.get_close_matches(path, tuner.endpoints.keys(), n=1)
@@ -208,15 +221,16 @@ def handle_command(tuner: OdriveCanTuner, line: str):
     ep = tuner.endpoints[path]
 
     if raw_value is None:
-        # No "=" present -> read and print current value.
+        # No "=" present -> read and print current value from each target node.
         if ep.get("type") not in TYPE_MAP:
             print(f"  '{path}' has type '{ep.get('type')}' (function/unsupported for direct read here)")
             return
-        value = tuner.read_param(node_id, path)
-        print(f"  odrv{node_id}.{path} = {value}")
+        for node_id in target_nodes:
+            value = tuner.read_param(node_id, path)
+            print(f"  odrv{node_id}.{path} = {value}")
         return
 
-    # "=" present -> write.
+    # "=" present -> write to each target node.
     if ep.get("access") == "r":
         print(f"  '{path}' is read-only, cannot set")
         return
@@ -230,13 +244,15 @@ def handle_command(tuner: OdriveCanTuner, line: str):
         print(f"  could not parse value '{raw_value}' as {ep['type']}: {e}")
         return
 
-    tuner.write_param(node_id, path, value, confirm=True)
+    for node_id in target_nodes:
+        tuner.write_param(node_id, path, value, confirm=True)
 
 
-def run_interactive(tuner: OdriveCanTuner):
+def run_interactive(tuner: OdriveCanTuner, all_nodes: list):
     print("ODrive CAN interactive tuner.")
-    print("  odrv0.axis0.controller.config.vel_gain = 0.15   -> writes")
-    print("  odrv0.axis0.controller.config.vel_gain          -> reads")
+    print("  odrv0.axis0.controller.config.vel_gain = 0.15   -> writes node 0 only")
+    print(f"  odrv.axis0.controller.config.vel_gain = 0.15    -> writes all nodes {all_nodes}")
+    print("  odrv0.axis0.controller.config.vel_gain          -> reads node 0 only")
     print("Type 'quit' or 'exit' to leave.\n")
     while True:
         try:
@@ -249,7 +265,7 @@ def run_interactive(tuner: OdriveCanTuner):
         if line.lower() in ("quit", "exit"):
             break
         try:
-            handle_command(tuner, line)
+            handle_command(tuner, line, all_nodes)
         except Exception as e:
             print(f"  error: {e}")
 
@@ -274,6 +290,12 @@ def main():
     parser = argparse.ArgumentParser(description="ODrive S1 CAN tuning tool")
     parser.add_argument("--endpoints", default="flat_endpoints.json", help="Path to flat_endpoints.json")
     parser.add_argument("--can-interface", default="can0")
+    parser.add_argument(
+        "--all-nodes", type=int, nargs="+", default=[0, 1, 2, 3],
+        help="Node IDs targeted in interactive mode when a command omits the "
+             "node number, e.g. 'odrv.axis0.controller.config.vel_gain = 0.15' "
+             "(default: 0 1 2 3)",
+    )
 
     subparsers = parser.add_subparsers(dest="mode")
 
@@ -310,7 +332,7 @@ def main():
                     tuner.save_configuration(node_id)
                     time.sleep(0.1)
         else:
-            run_interactive(tuner)
+            run_interactive(tuner, args.all_nodes)
     finally:
         tuner.close()
 
