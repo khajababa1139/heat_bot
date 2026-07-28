@@ -10,7 +10,7 @@ import subprocess
 # ============================================================
 
 CAN_IFACE = "can0"
-BITRATE = 250000
+BITRATE = 500000
 
 NODE_IDS = [0, 1]
 IDLE = 1

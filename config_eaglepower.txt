@@ -1,0 +1,79 @@
+# =========================================================
+# BLOCK 1 — Hardware / board / motor / controller (fixed values), then save
+# =========================================================
+
+# ---------- Power / board (24V battery) ----------
+odrv0.config.dc_bus_undervoltage_trip_level = 18.0     # VERIFY vs your pack's low-voltage cutoff (chemistry-dependent)
+odrv0.config.dc_bus_overvoltage_trip_level  = 32.0     # ~33% headroom above 24V nominal, matches your original ratio
+odrv0.config.dc_max_positive_current = 10.0            # <= your PSU/battery's rated current limit
+odrv0.config.dc_max_negative_current = -1.0            # -0.01 if NO brake resistor
+odrv0.config.brake_resistor0.enable     = True
+odrv0.config.brake_resistor0.resistance = 2.0
+
+# ---------- Motor (same physical motor, unchanged) ----------
+odrv0.axis0.config.motor.motor_type = MotorType.HIGH_CURRENT
+odrv0.axis0.config.motor.pole_pairs = 20                # VERIFY: magnets / 2
+odrv0.axis0.config.motor.torque_constant = 8.27 / 90    # = 0.0919 Nm/A
+odrv0.axis0.config.motor.current_soft_max = 20.0
+odrv0.axis0.config.motor.current_hard_max = 30.0
+odrv0.axis0.config.motor.calibration_current = 10.0
+odrv0.axis0.config.motor.resistance_calib_max_voltage = 3.0   # still < 0.5*Vbus (12 of 24V), fine as-is
+
+odrv0.axis0.config.torque_soft_min = -1.84              # Nm (20A * 0.0919), unaffected by bus voltage
+odrv0.axis0.config.torque_soft_max =  1.84
+
+# ---------- Encoder: onboard magnetic ----------
+odrv0.axis0.config.load_encoder        = EncoderId.ONBOARD_ENCODER0
+odrv0.axis0.config.commutation_encoder = EncoderId.ONBOARD_ENCODER0
+
+# ---------- Controller: velocity control as main mode ----------
+odrv0.axis0.controller.config.control_mode = ControlMode.VELOCITY_CONTROL
+odrv0.axis0.controller.config.input_mode   = InputMode.VEL_RAMP
+
+# No-load speed roughly scales with voltage: KV90 @24V ≈ 36 turn/s no-load (vs ~18 turn/s @12V)
+# Keep a safety margin below that, especially for a big direct-drive motor
+odrv0.axis0.controller.config.vel_limit           = 20.0   # turn/s — raise cautiously after testing
+odrv0.axis0.controller.config.vel_ramp_rate        = 5   # turns/s², gentle ramp for direct drive
+odrv0.axis0.controller.config.vel_limit_tolerance  = 1.5
+
+odrv0.axis0.controller.config.vel_gain            = 0.5
+odrv0.axis0.controller.config.vel_integrator_gain = 0.35
+
+odrv0.save_configuration()
+
+# =========================================================
+# BLOCK 2 — Calibration, then save
+# =========================================================
+
+odrv0.axis0.config.calibration_lockin.current       = 10.0
+odrv0.axis0.config.calibration_lockin.ramp_time      = 0.4
+odrv0.axis0.config.calibration_lockin.ramp_distance  = 3.1415927
+odrv0.axis0.config.calibration_lockin.accel          = 5.0
+odrv0.axis0.config.calibration_lockin.vel            = 5.0
+
+
+odrv0.axis0.requested_state = AxisState.MOTOR_CALIBRATION
+# wait for AXIS_STATE_IDLE, then check:
+odrv0.axis0.requested_state = AxisState.ENCODER_OFFSET_CALIBRATION
+
+odrv0.save_configuration()          # onboard encoder is absolute -> offset persists
+
+# =========================================================
+# BLOCK 3 — CAN configuration, then save
+# =========================================================
+
+odrv0.can.config.protocol   = Protocol.SIMPLE
+odrv0.can.config.baud_rate  = 500000
+odrv0.axis0.config.can.node_id = 0
+odrv0.axis0.config.can.heartbeat_msg_rate_ms = 100
+odrv0.axis0.config.can.encoder_msg_rate_ms = 10
+
+odrv0.save_configuration()
+
+# =========================================================
+# Run
+# =========================================================
+
+odrv0.axis0.requested_state = AxisState.CLOSED_LOOP_CONTROL
+odrv0.axis0.controller.input_vel = 3.0    # start slow, verify direction
+# odrv0.axis0.controller.input_vel = 0.0  # stop
