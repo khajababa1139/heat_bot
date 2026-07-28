@@ -8,3 +8,10 @@ __pycache__/
 *.pyc
 .vscode/
 .idea/
+*.log
+rosbag/
+build/
+install/
+log/
+src/FAST_LIO/
+src/livox_ros_driver2/
